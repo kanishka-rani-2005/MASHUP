@@ -3,33 +3,21 @@ import zipfile
 import smtplib
 from flask import Flask, render_template, request
 from email.message import EmailMessage
+from yt_dlp import YoutubeDL
 from pydub import AudioSegment
 from dotenv import load_dotenv
 
-# ==============================
-# Setup
-# ==============================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"), override=True)
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "downloads")
+DOWNLOAD_FOLDER = os.path.join(BASE_DIR, "downloads")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "mp4"}
-
-
-# ==============================
-# Utility Functions
-# ==============================
-
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def clear_folder(folder):
@@ -39,27 +27,35 @@ def clear_folder(folder):
             os.remove(file_path)
 
 
-def create_mashup_from_upload(files, duration, output_file):
-    clear_folder(UPLOAD_FOLDER)
-    clear_folder(OUTPUT_FOLDER)
+def download_videos(singer, num_videos):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(title)s.%(ext)s'),
+        'quiet': True,
+        'noplaylist': True
+    }
 
+    search_query = f"ytsearch{num_videos}:{singer} songs"
+
+    with YoutubeDL(ydl_opts) as ydl:
+        ydl.download([search_query])
+
+
+def trim_and_merge(duration, output_file):
     merged = AudioSegment.empty()
 
-    for file in files:
-        if file:
-            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(filepath)
+    for file in os.listdir(DOWNLOAD_FOLDER):
+        file_path = os.path.join(DOWNLOAD_FOLDER, file)
 
-            try:
-                audio = AudioSegment.from_file(filepath)
-                trimmed = audio[:duration * 1000]
-                merged += trimmed
-            except Exception as e:
-                print("Skipping invalid file:", file.filename)
-
+        try:
+            audio = AudioSegment.from_file(file_path)
+            trimmed = audio[:duration * 1000]
+            merged += trimmed
+        except:
+            continue
 
     if len(merged) == 0:
-        raise Exception("No valid audio files processed.")
+        raise Exception("No audio files processed.")
 
     final_path = os.path.join(OUTPUT_FOLDER, output_file)
     merged.export(final_path, format="mp3")
@@ -70,6 +66,8 @@ def create_mashup_from_upload(files, duration, output_file):
 def send_email(receiver_email, file_path):
     sender_email = os.getenv("EMAIL")
     sender_password = os.getenv("EMAIL_PASSWORD")
+    print(sender_email)
+    print(sender_password)
 
     msg = EmailMessage()
     msg["Subject"] = "Your Mashup File"
@@ -92,27 +90,27 @@ def send_email(receiver_email, file_path):
         smtp.send_message(msg)
 
 
-# ==============================
-# Routes
-# ==============================
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
         try:
+            singer = request.form["singer"]
+            num_videos = int(request.form["num_videos"])
             duration = int(request.form["duration"])
             email = request.form["email"]
-            files = request.files.getlist("songs")
 
-            if not files:
-                return "Please upload at least one audio file."
+            if num_videos <= 10:
+                return "Number of videos must be greater than 10."
 
-            if duration > 60:
-                return "Maximum duration allowed is 60 seconds."
+            if duration <= 20:
+                return "Duration must be greater than 20 seconds."
 
-            final_audio = create_mashup_from_upload(
-                files, duration, "mashup.mp3"
-            )
+            clear_folder(DOWNLOAD_FOLDER)
+            clear_folder(OUTPUT_FOLDER)
+
+            download_videos(singer, num_videos)
+
+            final_audio = trim_and_merge(duration, "mashup.mp3")
 
             zip_path = os.path.join(OUTPUT_FOLDER, "mashup.zip")
 
@@ -129,10 +127,6 @@ def index():
     return render_template("index.html")
 
 
-# ==============================
-# Run App
-# ==============================
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)

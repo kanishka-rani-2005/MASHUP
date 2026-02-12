@@ -3,8 +3,8 @@ import os
 from yt_dlp import YoutubeDL
 from pydub import AudioSegment
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DOWNLOADS_FOLDER = os.path.join(BASE_DIR, "downloads")
+DOWNLOAD_FOLDER = "downloads"
+
 
 def validate_inputs(args):
     if len(args) != 5:
@@ -31,24 +31,18 @@ def validate_inputs(args):
     return singer, num_videos, duration, args[4]
 
 
-def clear_downloads_folder():
-    os.makedirs(DOWNLOADS_FOLDER, exist_ok=True)
-
-    for file in os.listdir(DOWNLOADS_FOLDER):
-        file_path = os.path.join(DOWNLOADS_FOLDER, file)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
+def clear_downloads():
+    os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+    for file in os.listdir(DOWNLOAD_FOLDER):
+        os.remove(os.path.join(DOWNLOAD_FOLDER, file))
 
 
 def download_videos(singer, num_videos):
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': os.path.join(DOWNLOADS_FOLDER, '%(title)s.%(ext)s'),
-        'quiet': False,
-        'noplaylist': True,
-        'js_runtimes': {
-            'node': {}
-        }
+        'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
+        'quiet': True,
+        'noplaylist': True
     }
 
     search_query = f"ytsearch{num_videos}:{singer} songs"
@@ -59,22 +53,18 @@ def download_videos(singer, num_videos):
 
 def trim_and_merge(duration, output_file):
     merged = AudioSegment.empty()
-    os.makedirs(DOWNLOADS_FOLDER, exist_ok=True)
 
-
-    for file in os.listdir(DOWNLOADS_FOLDER):
-        if file.endswith((".webm", ".m4a", ".mp3", ".mp4")):
-            file_path = os.path.join(DOWNLOADS_FOLDER, file)
-
-            try:
-                audio = AudioSegment.from_file(file_path)
-                trimmed = audio[:duration * 1000]
-                merged += trimmed
-            except Exception as e:
-                print(f"Skipping {file} due to error:", e)
+    for file in os.listdir(DOWNLOAD_FOLDER):
+        file_path = os.path.join(DOWNLOAD_FOLDER, file)
+        try:
+            audio = AudioSegment.from_file(file_path)
+            trimmed = audio[:duration * 1000]
+            merged += trimmed
+        except Exception as e:
+            print("Skipping file:", file)
 
     if len(merged) == 0:
-        print("No audio files were processed.")
+        print("No audio files processed.")
         sys.exit(1)
 
     merged.export(output_file, format="mp3")
@@ -84,11 +74,10 @@ def main():
     singer, num_videos, duration, output_file = validate_inputs(sys.argv)
 
     try:
-        clear_downloads_folder()
+        clear_downloads()
         download_videos(singer, num_videos)
         trim_and_merge(duration, output_file)
         print("Mashup created successfully:", output_file)
-
     except Exception as e:
         print("Error occurred:", e)
         sys.exit(1)

@@ -1,95 +1,55 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mashup Web App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+    <title>Mashup Web Service</title>
     <style>
         body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            font-family: Arial;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding-top: 50px;
         }
 
         .container {
             background: white;
-            padding: 40px;
-            border-radius: 12px;
-            width: 350px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            text-align: center;
-        }
-
-        h2 {
-            margin-bottom: 25px;
-            color: #2a5298;
+            width: 400px;
+            margin: auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
         }
 
         input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0 18px 0;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            font-size: 14px;
-            transition: 0.3s;
-        }
-
-        input:focus {
-            border-color: #2a5298;
-            outline: none;
-            box-shadow: 0 0 5px rgba(42, 82, 152, 0.5);
+            width: 90%;
+            padding: 8px;
+            margin: 8px 0;
         }
 
         button {
-            width: 100%;
-            padding: 12px;
-            background: #2a5298;
-            color: white;
+            background-color: orange;
+            padding: 10px 20px;
             border: none;
-            border-radius: 6px;
-            font-size: 15px;
             cursor: pointer;
-            transition: 0.3s;
         }
 
         button:hover {
-            background: #1e3c72;
-        }
-
-        .footer {
-            margin-top: 15px;
-            font-size: 12px;
-            color: gray;
+            background-color: darkorange;
         }
     </style>
 </head>
-
 <body>
+
     <div class="container">
-        <h2>Create Your Mashup</h2>
-        
-        <form method="POST" enctype="multipart/form-data">
-    <label>Upload Audio Files:</label><br>
-    <input type="file" name="songs" multiple required><br><br>
+        <h2>Create Mashup</h2>
 
-    <label>Duration (seconds):</label><br>
-    <input type="number" name="duration" required><br><br>
-
-    <label>Email:</label><br>
-    <input type="email" name="email" required><br><br>
-
-    <button type="submit">Create Mashup</button>
-</form>
-
-
-        <div class="footer">
-            Powered by Flask & yt-dlp
-        </div>
+        <form method="POST">
+            <input type="text" name="singer" placeholder="Singer Name" required><br>
+            <input type="number" name="num_videos" placeholder="Number of Videos (>10)" required><br>
+            <input type="number" name="duration" placeholder="Duration of each video (>20 sec)" required><br>
+            <input type="email" name="email" placeholder="Email ID" required><br>
+            <button type="submit">Submit</button>
+        </form>
     </div>
+
 </body>
 </html>
