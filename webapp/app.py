@@ -3,23 +3,17 @@ import zipfile
 import smtplib
 from flask import Flask, render_template, request
 from email.message import EmailMessage
-from yt_dlp import YoutubeDL
 from pydub import AudioSegment
-
 from dotenv import load_dotenv
+
+# ==============================
+# Setup
+# ==============================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-print("BASE_DIR:", BASE_DIR)
-print("ENV PATH:", os.path.join(BASE_DIR, ".env"))
-
-
-load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"), override=True)
-
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=True)
 
 app = Flask(__name__)
-
-# Base directory of this file
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "downloads")
 OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
@@ -27,58 +21,45 @@ OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-
-import time
-
-def create_mashup(singer, num_videos, duration, output_file):
-
-    # Clear old files
-    for file in os.listdir(UPLOAD_FOLDER):
-        os.remove(os.path.join(UPLOAD_FOLDER, file))
-
-    ydl_opts = {
-    'format': 'bestaudio',
-    'outtmpl': os.path.join(UPLOAD_FOLDER, '%(title)s.%(ext)s'),
-    'quiet': True,
-    'noplaylist': True,
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['web']
-        }
-    }
-}
+ALLOWED_EXTENSIONS = {"mp3", "wav", "m4a", "webm", "mp4"}
 
 
+# ==============================
+# Utility Functions
+# ==============================
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def clear_folder(folder):
+    for file in os.listdir(folder):
+        file_path = os.path.join(folder, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+
+def create_mashup_from_upload(files, duration, output_file):
+    clear_folder(UPLOAD_FOLDER)
+    clear_folder(OUTPUT_FOLDER)
 
     merged = AudioSegment.empty()
 
-    for i in range(num_videos):
-        try:
-            search_query = f"ytsearch1:{singer} song"
+    for file in files:
+        if file:
+            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+            file.save(filepath)
+
             try:
-                with YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([search_query])
+                audio = AudioSegment.from_file(filepath)
+                trimmed = audio[:duration * 1000]
+                merged += trimmed
             except Exception as e:
-                print("REAL DOWNLOAD ERROR:")
-                print(e)
-                raise
-            time.sleep(3)  # IMPORTANT: delay to avoid bot detection
+                print("Skipping invalid file:", file.filename)
 
-        except Exception as e:
-            print("Download error:", e)
-
-    # Process downloaded files
-    for file in os.listdir(UPLOAD_FOLDER):
-        path = os.path.join(UPLOAD_FOLDER, file)
-        try:
-            audio = AudioSegment.from_file(path)
-            trimmed = audio[:duration * 1000]
-            merged += trimmed
-        except Exception as e:
-            print("Skipping:", file, e)
 
     if len(merged) == 0:
-        raise Exception("No audio files processed.")
+        raise Exception("No valid audio files processed.")
 
     final_path = os.path.join(OUTPUT_FOLDER, output_file)
     merged.export(final_path, format="mp3")
@@ -89,11 +70,6 @@ def create_mashup(singer, num_videos, duration, output_file):
 def send_email(receiver_email, file_path):
     sender_email = os.getenv("EMAIL")
     sender_password = os.getenv("EMAIL_PASSWORD")
-    print("EMAIL:", sender_email)
-    print("PASSWORD:", sender_password)
-
-
-
 
     msg = EmailMessage()
     msg["Subject"] = "Your Mashup File"
@@ -104,37 +80,59 @@ def send_email(receiver_email, file_path):
     with open(file_path, "rb") as f:
         file_data = f.read()
 
-    msg.add_attachment(file_data, maintype="application", subtype="zip", filename="mashup.zip")
+    msg.add_attachment(
+        file_data,
+        maintype="application",
+        subtype="zip",
+        filename="mashup.zip"
+    )
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(sender_email, sender_password)
         smtp.send_message(msg)
 
 
+# ==============================
+# Routes
+# ==============================
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        singer = request.form["singer"]
-        num_videos = int(request.form["num_videos"])
-        duration = int(request.form["duration"])
-        email = request.form["email"]
+        try:
+            duration = int(request.form["duration"])
+            email = request.form["email"]
+            files = request.files.getlist("songs")
 
-        output_file = "mashup.mp3"
-        final_audio = create_mashup(singer, num_videos, duration, output_file)
+            if not files:
+                return "Please upload at least one audio file."
 
-        zip_path = os.path.join(OUTPUT_FOLDER, "mashup.zip")
+            if duration > 60:
+                return "Maximum duration allowed is 60 seconds."
 
-        with zipfile.ZipFile(zip_path, 'w') as zipf:
-            zipf.write(final_audio)
+            final_audio = create_mashup_from_upload(
+                files, duration, "mashup.mp3"
+            )
 
-        send_email(email, zip_path)
+            zip_path = os.path.join(OUTPUT_FOLDER, "mashup.zip")
 
-        return "Mashup sent to your email!"
+            with zipfile.ZipFile(zip_path, "w") as zipf:
+                zipf.write(final_audio, arcname="mashup.mp3")
+
+            send_email(email, zip_path)
+
+            return "Mashup created and sent successfully!"
+
+        except Exception as e:
+            return f"Error: {str(e)}"
 
     return render_template("index.html")
 
 
+# ==============================
+# Run App
+# ==============================
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-

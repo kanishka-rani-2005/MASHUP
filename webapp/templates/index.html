@@ -73,17 +73,19 @@
     <div class="container">
         <h2>Create Your Mashup</h2>
         
-        <form method="POST">
-            <input type="text" name="singer" placeholder="Singer Name" required>
+        <form method="POST" enctype="multipart/form-data">
+    <label>Upload Audio Files:</label><br>
+    <input type="file" name="songs" multiple required><br><br>
 
-            <input type="number" name="num_videos" placeholder="Number of Videos" required>
+    <label>Duration (seconds):</label><br>
+    <input type="number" name="duration" required><br><br>
 
-            <input type="number" name="duration" placeholder="Duration (seconds)" required>
+    <label>Email:</label><br>
+    <input type="email" name="email" required><br><br>
 
-            <input type="email" name="email" placeholder="Your Email" required>
+    <button type="submit">Create Mashup</button>
+</form>
 
-            <button type="submit">Create Mashup</button>
-        </form>
 
         <div class="footer">
             Powered by Flask & yt-dlp
