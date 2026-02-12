@@ -7,7 +7,13 @@ from yt_dlp import YoutubeDL
 from pydub import AudioSegment
 
 from dotenv import load_dotenv
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+print("BASE_DIR:", BASE_DIR)
+print("ENV PATH:", os.path.join(BASE_DIR, ".env"))
+
+
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"), override=True)
 
 
 app = Flask(__name__)
@@ -22,45 +28,55 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
+import time
 
 def create_mashup(singer, num_videos, duration, output_file):
 
-    # Clear old downloads
+    # Clear old files
     for file in os.listdir(UPLOAD_FOLDER):
         os.remove(os.path.join(UPLOAD_FOLDER, file))
 
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': os.path.join(UPLOAD_FOLDER, '%(title)s.%(ext)s'),
-        'quiet': False,
-        'noplaylist': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android']
-            }
-        }
-    }
+    'format': 'bestaudio/best',
+    'outtmpl': os.path.join(UPLOAD_FOLDER, '%(title)s.%(ext)s'),
+    'quiet': False,
+    'noplaylist': True,
+    'cookiefile': os.path.join(BASE_DIR, 'cookies.txt'),
 
-    search_query = f"ytsearch{num_videos}:{singer} songs"
+    # Required for 2026 YouTube protection
+    'js_runtimes': {
+        'node': {}
+    },
+    'remote_components':  ['ejs:github']
+}
 
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([search_query])
-    except Exception as e:
-        print("Download error:", e)
-        raise Exception("YouTube blocked the request. Try again after some time.")
 
     merged = AudioSegment.empty()
 
-    for file in os.listdir(UPLOAD_FOLDER):
-        if file.endswith((".webm", ".m4a", ".mp3",'.mp4')):
-            path = os.path.join(UPLOAD_FOLDER, file)
+    for i in range(num_videos):
+        try:
+            search_query = f"ytsearch1:{singer} song"
             try:
-                audio = AudioSegment.from_file(path)
-                trimmed = audio[:duration * 1000]
-                merged += trimmed
+                with YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([search_query])
             except Exception as e:
-                print("Skipping:", file, e)
+                print("REAL DOWNLOAD ERROR:")
+                print(e)
+                raise
+            time.sleep(3)  # IMPORTANT: delay to avoid bot detection
+
+        except Exception as e:
+            print("Download error:", e)
+
+    # Process downloaded files
+    for file in os.listdir(UPLOAD_FOLDER):
+        path = os.path.join(UPLOAD_FOLDER, file)
+        try:
+            audio = AudioSegment.from_file(path)
+            trimmed = audio[:duration * 1000]
+            merged += trimmed
+        except Exception as e:
+            print("Skipping:", file, e)
 
     if len(merged) == 0:
         raise Exception("No audio files processed.")
@@ -74,6 +90,10 @@ def create_mashup(singer, num_videos, duration, output_file):
 def send_email(receiver_email, file_path):
     sender_email = os.getenv("EMAIL")
     sender_password = os.getenv("EMAIL_PASSWORD")
+    print("EMAIL:", sender_email)
+    print("PASSWORD:", sender_password)
+
+
 
 
     msg = EmailMessage()
