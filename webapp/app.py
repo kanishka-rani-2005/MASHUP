@@ -37,18 +37,17 @@ def create_mashup(singer, num_videos, duration, output_file):
         os.remove(os.path.join(UPLOAD_FOLDER, file))
 
     ydl_opts = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio',
     'outtmpl': os.path.join(UPLOAD_FOLDER, '%(title)s.%(ext)s'),
-    'quiet': False,
+    'quiet': True,
     'noplaylist': True,
-    'cookiefile': os.path.join(BASE_DIR, 'cookies.txt'),
-
-    # Required for 2026 YouTube protection
-    'js_runtimes': {
-        'node': {}
-    },
-    'remote_components':  ['ejs:github']
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['web']
+        }
+    }
 }
+
 
 
     merged = AudioSegment.empty()
